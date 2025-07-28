@@ -3,6 +3,8 @@ workflows:
     name: Capacitor iOS Workflow (Optimized)
     max_build_duration: 60
     environment:
+      # Use a specific Xcode version if needed, e.g., xcode: 15.2
+      xcode: latest # Ensure this is a real device-compatible Xcode version
       node: latest
     scripts:
       - name: Install Bun
@@ -24,19 +26,62 @@ workflows:
           export PATH="$HOME/.bun/bin:$PATH"
           echo "Generating iOS project with minimal plugins..."
           npx cap add ios
-          npx cap sync ios
-      - name: Build iOS app (optimized)
+          npx cap sync ios # Ensure this updates web assets in iOS/App/public correctly
+      - name: Install CocoaPods (for iOS Native Project)
         script: |
+          # Navigate into the iOS native project directory
           cd ios/App
-          echo "Installing minimal CocoaPods..."
-          pod install --silent --repo-update
-          echo "Building iOS app with only used plugins..."
-          xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug -destination 'platform=iOS Simulator,id=FD1BF54E-4D3D-45B8-AF09-425C68025542' -derivedDataPath build -quiet -parallelizeTargets
-      - name: Create iOS bundle
+          echo "Installing CocoaPods..."
+          pod install --repo-update # --silent can hide useful error messages
+          # Go back to the root of the Capacitor project
+          cd ../.. 
+      - name: Archive iOS App
         script: |
-          cd ios/App/build/Build/Products/Debug-iphonesimulator
-          echo "Creating optimized iOS bundle..."
-          zip -r ../../../../../../ios-app-optimized.zip App.app -q
-          echo "✅ Optimized iOS build completed!"
+          # Move into the iOS native project directory
+          cd ios/App
+          # This command archives your app. 
+          # Replace 'App' with your actual Xcode scheme name if different.
+          # Use 'Release' or 'AdHoc' configuration depending on your signing.
+          # The -archivePath specifies where the .xcarchive will be created.
+          xcodebuild archive \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath $CM_BUILD_DIR/build/App.xcarchive \
+            CODE_SIGN_IDENTITY="$CM_CERTIFICATE_CODE_SIGN_IDENTITY" \
+            PROVISIONING_PROFILE_SPECIFIER="$CM_PROVISIONING_PROFILE_SPECIFIER" \
+            OTHER_CODE_SIGN_FLAGS="--allow-provisioning-updates" \
+            -allowProvisioningUpdates | xcpretty
+
+          # Note: Codemagic automatically manages CODE_SIGN_IDENTITY and PROVISIONING_PROFILE_SPECIFIER 
+          # if you've configured signing in the Codemagic UI.
+          # You might not need to explicitly set them here if using Codemagic's automatic signing.
+          # However, -allowProvisioningUpdates is often useful.
+
+      - name: Export IPA
+        script: |
+          # The export path where the IPA will be generated
+          IPA_EXPORT_PATH="$CM_BUILD_DIR/ipa_output"
+          mkdir -p "$IPA_EXPORT_PATH"
+
+          # This command exports the .ipa from the .xcarchive
+          # You will need an ExportOptions.plist file. Codemagic can generate a basic one.
+          # For App Store: -exportOptionsPlist path/to/AppStoreExportOptions.plist
+          # For Ad Hoc: -exportOptionsPlist path/to/AdHocExportOptions.plist
+          # For testing, you can use Codemagic's auto-generated export options:
+          xcodebuild -exportArchive \
+            -archivePath $CM_BUILD_DIR/build/App.xcarchive \
+            -exportPath "$IPA_EXPORT_PATH" \
+            -exportOptionsPlist $CM_BUILD_DIR/ios/App/ExportOptions.plist \
+            -allowProvisioningUpdates | xcpretty
+
+          # The ExportOptions.plist is crucial. Codemagic often places a default one
+          # in the project's iOS directory if you configure signing via UI.
+          # If not, you might need to create one manually or have Codemagic generate it.
+
     artifacts:
-      - ios-app-optimized.zip
+      # This captures the .ipa file. Codemagic will find it in the specified export path.
+      - $CM_BUILD_DIR/ipa_output/*.ipa
+      # Optional: Capture the .xcarchive for debugging purposes (large file)
+      # - $CM_BUILD_DIR/build/*.xcarchive

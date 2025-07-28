@@ -1,48 +1,79 @@
+# Codemagic CI/CD workflow for Ionic Capacitor iOS app with Bun
+
 workflows:
-  ionic-capacitor-ios-workflow-optimized:
-    name: Capacitor iOS Workflow (Optimized)
-    max_build_duration: 60
+  ionic-capacitor-ios-optimized:
+    name: Capacitor iOS Build with Bun (Optimized)
+    max_build_duration: 90 # Increased duration slightly for safety
+    instance_type: mac_mini_m1 # Recommended for faster iOS builds
     environment:
-      # Use a specific Xcode version if needed, e.g., xcode: 15.2
-      xcode: latest # Ensure this is a real device-compatible Xcode version
-      node: latest
+      # Choose the Xcode version your project requires. 'latest' is usually fine.
+      xcode: latest 
+      node: latest # Using 'latest' Node.js
+
     scripts:
       - name: Install Bun
         script: |
+          echo "Installing Bun..."
           curl -fsSL https://bun.sh/install | bash
+          
+          # Add Bun's bin directory to PATH for the current shell session
+          # This is crucial for subsequent 'bun' commands to work
           export PATH="$HOME/.bun/bin:$PATH"
-      - name: Install optimized dependencies
+          
+          echo "Bun installed. Version:"
+          bun --version # Verify Bun installation
+
+      - name: Install JavaScript Dependencies with Bun
         script: |
-          export PATH="$HOME/.bun/bin:$PATH"
-          echo "Installing only used dependencies..."
-          bun install --silent
-      - name: Build web assets
+          echo "Ensuring Bun is in PATH for this step..."
+          export PATH="$HOME/.bun/bin:$PATH" # Re-export PATH for safety across script blocks
+          echo "Installing optimized JavaScript dependencies using Bun..."
+          # Using --silent to reduce log verbosity, or remove it for full logs
+          bun install --silent 
+
+      - name: Build Web Assets with Bun
         script: |
-          export PATH="$HOME/.bun/bin:$PATH"
-          echo "Building web assets..."
+          echo "Ensuring Bun is in PATH for this step..."
+          export PATH="$HOME/.bun/bin:$PATH" # Re-export PATH for safety
+          echo "Building web assets using Bun..."
+          # Replace 'build' with your actual script name from package.json if it's different
           bun run build
-      - name: Generate iOS project
+
+          # IMPORTANT: If your 'bun run build' command outputs to a directory other than 'www'
+          # (e.g., 'dist', 'out'), you MUST copy those assets to 'www/' for Capacitor.
+          # Example for 'dist' output:
+          # echo "Copying built assets from 'dist' to 'www'..."
+          # cp -R dist/* www/
+          # If your build script directly outputs to 'www', you don't need this.
+
+      - name: Generate iOS Project & Sync Assets
         script: |
-          export PATH="$HOME/.bun/bin:$PATH"
-          echo "Generating iOS project with minimal plugins..."
+          echo "Generating/Updating iOS native project with Capacitor..."
+          # 'npx cap add ios' adds the iOS platform if not already added.
+          # 'npx cap sync ios' copies web assets and updates native project.
           npx cap add ios
-          npx cap sync ios # Ensure this updates web assets in iOS/App/public correctly
-      - name: Install CocoaPods (for iOS Native Project)
+          npx cap sync ios 
+
+      - name: Install CocoaPods for iOS Native Project
         script: |
-          # Navigate into the iOS native project directory
+          echo "Navigating to iOS project directory..."
           cd ios/App
-          echo "Installing CocoaPods..."
-          pod install --repo-update # --silent can hide useful error messages
-          # Go back to the root of the Capacitor project
-          cd ../.. 
+          echo "Installing CocoaPods dependencies..."
+          # --repo-update ensures pods are updated to the latest specs
+          pod install --repo-update 
+          echo "Finished CocoaPods installation."
+          cd ../.. # Go back to the project root
+
       - name: Archive iOS App
         script: |
-          # Move into the iOS native project directory
+          echo "Navigating to iOS project directory for archiving..."
           cd ios/App
-          # This command archives your app. 
-          # Replace 'App' with your actual Xcode scheme name if different.
-          # Use 'Release' or 'AdHoc' configuration depending on your signing.
-          # The -archivePath specifies where the .xcarchive will be created.
+          echo "Archiving iOS app for distribution..."
+          
+          # The scheme should match your main app target in Xcode. Default is 'App'.
+          # Configuration 'Release' is standard for distribution builds.
+          # -sdk iphoneos specifies building for a physical device.
+          # -archivePath specifies where the .xcarchive will be stored.
           xcodebuild archive \
             -workspace App.xcworkspace \
             -scheme App \
@@ -51,37 +82,37 @@ workflows:
             -archivePath $CM_BUILD_DIR/build/App.xcarchive \
             CODE_SIGN_IDENTITY="$CM_CERTIFICATE_CODE_SIGN_IDENTITY" \
             PROVISIONING_PROFILE_SPECIFIER="$CM_PROVISIONING_PROFILE_SPECIFIER" \
+            # --allow-provisioning-updates is often useful to let Xcode manage profiles
             OTHER_CODE_SIGN_FLAGS="--allow-provisioning-updates" \
-            -allowProvisioningUpdates | xcpretty
+            -allowProvisioningUpdates | xcpretty # xcpretty makes output more readable
 
-          # Note: Codemagic automatically manages CODE_SIGN_IDENTITY and PROVISIONING_PROFILE_SPECIFIER 
-          # if you've configured signing in the Codemagic UI.
-          # You might not need to explicitly set them here if using Codemagic's automatic signing.
-          # However, -allowProvisioningUpdates is often useful.
+          echo "iOS App archiving completed."
+          cd ../.. # Go back to the project root
 
       - name: Export IPA
         script: |
-          # The export path where the IPA will be generated
-          IPA_EXPORT_PATH="$CM_BUILD_DIR/ipa_output"
-          mkdir -p "$IPA_EXPORT_PATH"
+          echo "Preparing to export IPA from archive..."
+          # This variable holds the path to the ExportOptions.plist generated by Codemagic.
+          # This relies on you configuring iOS Code Signing in Codemagic UI.
+          if [ -z "$CM_EXPORT_OPTIONS_PATH" ]; then
+            echo "Error: CM_EXPORT_OPTIONS_PATH is not set. Please ensure iOS Code Signing is configured in Codemagic UI."
+            exit 1
+          fi
 
-          # This command exports the .ipa from the .xcarchive
-          # You will need an ExportOptions.plist file. Codemagic can generate a basic one.
-          # For App Store: -exportOptionsPlist path/to/AppStoreExportOptions.plist
-          # For Ad Hoc: -exportOptionsPlist path/to/AdHocExportOptions.plist
-          # For testing, you can use Codemagic's auto-generated export options:
+          IPA_EXPORT_DIR="$CM_BUILD_DIR/ipa_output"
+          mkdir -p "$IPA_EXPORT_DIR"
+          
+          echo "Exporting IPA to: $IPA_EXPORT_DIR"
           xcodebuild -exportArchive \
             -archivePath $CM_BUILD_DIR/build/App.xcarchive \
-            -exportPath "$IPA_EXPORT_PATH" \
-            -exportOptionsPlist $CM_BUILD_DIR/ios/App/ExportOptions.plist \
+            -exportPath "$IPA_EXPORT_DIR" \
+            -exportOptionsPlist "$CM_EXPORT_OPTIONS_PATH" \
             -allowProvisioningUpdates | xcpretty
 
-          # The ExportOptions.plist is crucial. Codemagic often places a default one
-          # in the project's iOS directory if you configure signing via UI.
-          # If not, you might need to create one manually or have Codemagic generate it.
+          echo "✅ iOS IPA export completed!"
 
+    # Defines what files/folders from the build machine should be saved as build artifacts
     artifacts:
-      # This captures the .ipa file. Codemagic will find it in the specified export path.
-      - $CM_BUILD_DIR/ipa_output/*.ipa
-      # Optional: Capture the .xcarchive for debugging purposes (large file)
+      - $CM_BUILD_DIR/ipa_output/*.ipa # This will save your final IPA file
+      # Optional: To save the .xcarchive for debugging (it can be very large)
       # - $CM_BUILD_DIR/build/*.xcarchive

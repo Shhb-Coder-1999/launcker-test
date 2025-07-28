@@ -132,7 +132,7 @@ workflows:
             -archivePath $CM_BUILD_DIR/build/App.xcarchive \
             -exportPath "$IPA_EXPORT_DIR" \
             -exportOptionsPlist "$PLIST_PATH" \
-            -allowProvisioningUpdates | xcpretty
+            -allowProvisioningUpdates
 
           echo "✅ iOS IPA export completed!"
 

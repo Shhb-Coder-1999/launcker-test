@@ -70,12 +70,6 @@ workflows:
           cd ios/App
           echo "Archiving iOS app for distribution..."
           
-          # The scheme should match your main app target in Xcode. Default is 'App'.
-          # Configuration 'Release' is standard for distribution builds.
-          # -sdk iphoneos specifies building for a physical device.
-          # -archivePath specifies where the .xcarchive will be stored.
-          # CODE_SIGN_IDENTITY and PROVISIONING_PROFILE_SPECIFIER are automatically provided by Codemagic
-          # if you set up iOS Code Signing in the UI.
           xcodebuild archive \
             -workspace App.xcworkspace \
             -scheme App \
@@ -87,18 +81,45 @@ workflows:
           echo "iOS App archiving completed."
           cd ../.. # Go back to the project root
 
+      # --- DEBUGGING STEP: CRITICAL TO UNDERSTAND WHY FILE IS NOT FOUND ---
+      - name: Debug - Verify ExportOptions.plist Presence
+        script: |
+          echo "--- DEBUGGING: Checking contents of the iOS App directory ---"
+          echo "Current working directory: $(pwd)"
+          echo "Listing contents of: $CM_BUILD_DIR/ios/App/"
+          ls -al "$CM_BUILD_DIR/ios/App/" # THIS IS THE KEY OUTPUT TO CHECK IN LOGS
+          echo "--- End of directory listing ---"
+          
+          echo "Attempting to locate ExportOptions.plist at the specified path..."
+          if [ -f "$CM_BUILD_DIR/ios/App/ExportOptions.plist" ]; then
+            echo "SUCCESS: ExportOptions.plist FOUND at $CM_BUILD_DIR/ios/App/ExportOptions.plist"
+            echo "--- Content of ExportOptions.plist: ---"
+            cat "$CM_BUILD_DIR/ios/App/ExportOptions.plist" # Print content to verify it's the correct file
+            echo "--- End of ExportOptions.plist content ---"
+          else
+            echo "FAILURE: ExportOptions.plist NOT FOUND at $CM_BUILD_DIR/ios/App/ExportOptions.plist as expected."
+            echo "Possible reasons:"
+            echo "  1. It's not correctly committed to your Git repo at ios/App/."
+            echo "  2. There's a subtle typo in the file name or path (case sensitivity)."
+            echo "  3. It's being generated/moved/deleted by another script before this step."
+            echo "  4. Your .gitignore might be preventing it from being cloned correctly."
+          fi
+          echo "--- END DEBUGGING ---"
+
       - name: Export IPA
         script: |
           echo "Preparing to export IPA from archive..."
           
-          # IMPORTANT: This path assumes you have committed ExportOptions.plist
+          # This path assumes you have committed ExportOptions.plist
           # into your repository at ios/App/ExportOptions.plist
           PLIST_PATH="$CM_BUILD_DIR/ios/App/ExportOptions.plist"
           
+          # The error message explicitly says it's not found, so the 'if' condition will trigger
+          # if the file isn't physically there. The debugging step above should confirm this.
           if [ ! -f "$PLIST_PATH" ]; then
-            echo "Error: ExportOptions.plist not found at $PLIST_PATH."
-            echo "Please ensure the file is committed to your repository or choose Codemagic's automatic generation method."
-            exit 1
+            echo "Error: ExportOptions.plist not found at $PLIST_PATH. This was confirmed by the previous debug step if it printed 'FAILURE'."
+            echo "Please ensure the file is committed to your repository at 'ios/App/ExportOptions.plist' and is not ignored by Git."
+            exit 1 # Exit with error, as the file is truly missing at this point.
           fi
 
           echo "Using ExportOptions.plist from repository at: $PLIST_PATH"

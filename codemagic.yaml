@@ -1,0 +1,143 @@
+# Codemagic CI/CD workflow for Ionic Capacitor iOS app with Bun
+
+workflows:
+  ionic-capacitor-ios-optimized:
+    name: Capacitor iOS Build with Bun (Optimized & IPA Export)
+    max_build_duration: 90 # Increased duration slightly for safety
+    instance_type: mac_mini_m1 # Recommended for faster iOS builds on Codemagic
+    environment:
+      # Choose the Xcode version your project requires. 'latest' is usually fine.
+      xcode: latest 
+      node: latest # Using 'latest' Node.js
+
+    scripts:
+      - name: Install Bun
+        script: |
+          echo "Installing Bun..."
+          curl -fsSL https://bun.sh/install | bash
+          
+          # Add Bun's bin directory to PATH for the current shell session
+          # This is crucial for subsequent 'bun' commands to work
+          export PATH="$HOME/.bun/bin:$PATH"
+          
+          echo "Bun installed. Version:"
+          bun --version # Verify Bun installation
+
+      - name: Install JavaScript Dependencies with Bun
+        script: |
+          echo "Ensuring Bun is in PATH for this step..."
+          export PATH="$HOME/.bun/bin:$PATH" # Re-export PATH for safety across script blocks
+          echo "Installing optimized JavaScript dependencies using Bun..."
+          # Using --silent to reduce log verbosity, or remove it for full logs
+          bun install --silent 
+
+      - name: Build Web Assets with Bun
+        script: |
+          echo "Ensuring Bun is in PATH for this step..."
+          export PATH="$HOME/.bun/bin:$PATH" # Re-export PATH for safety
+          echo "Building web assets using Bun..."
+          # Replace 'build' with your actual script name from package.json if it's different
+          bun run build
+
+          # IMPORTANT: If your 'bun run build' command outputs to a directory other than 'www'
+          # (e.g., 'dist', 'out'), you MUST copy those assets to 'www/' for Capacitor.
+          # Example for 'dist' output:
+          # echo "Copying built assets from 'dist' to 'www'..."
+          # cp -R dist/* www/
+          # If your build script directly outputs to 'www', you don't need this step.
+
+      - name: Generate iOS Project & Sync Assets
+        script: |
+          echo "Generating/Updating iOS native project with Capacitor..."
+          # 'npx cap add ios' adds the iOS platform if not already added.
+          # 'npx cap sync ios' copies web assets and updates native project.
+          npx cap add ios
+          npx cap sync ios 
+
+      - name: Install CocoaPods for iOS Native Project
+        script: |
+          echo "Navigating to iOS project directory..."
+          cd ios/App
+          echo "Installing CocoaPods dependencies..."
+          # --repo-update ensures pods are updated to the latest specs
+          pod install --repo-update 
+          echo "Finished CocoaPods installation."
+          cd ../.. # Go back to the project root (root of your Capacitor project)
+
+      - name: Archive iOS App
+        script: |
+          echo "Navigating to iOS project directory for archiving..."
+          cd ios/App
+          echo "Archiving iOS app for distribution..."
+          
+          xcodebuild archive \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath $CM_BUILD_DIR/build/App.xcarchive \
+            -allowProvisioningUpdates | xcpretty # xcpretty makes output more readable
+
+          echo "iOS App archiving completed."
+          cd ../.. # Go back to the project root
+
+      # --- DEBUGGING STEP: CRITICAL TO UNDERSTAND WHY FILE IS NOT FOUND ---
+      - name: Debug - Verify ExportOptions.plist Presence
+        script: |
+          echo "--- DEBUGGING: Checking contents of the iOS App directory ---"
+          echo "Current working directory: $(pwd)"
+          echo "Listing contents of: $CM_BUILD_DIR/ios/App/"
+          ls -al "$CM_BUILD_DIR/ios/App/" # THIS IS THE KEY OUTPUT TO CHECK IN LOGS
+          echo "--- End of directory listing ---"
+          
+          echo "Attempting to locate ExportOptions.plist at the specified path..."
+          if [ -f "$CM_BUILD_DIR/ios/App/ExportOptions.plist" ]; then
+            echo "SUCCESS: ExportOptions.plist FOUND at $CM_BUILD_DIR/ios/App/ExportOptions.plist"
+            echo "--- Content of ExportOptions.plist: ---"
+            cat "$CM_BUILD_DIR/ios/App/ExportOptions.plist" # Print content to verify it's the correct file
+            echo "--- End of ExportOptions.plist content ---"
+          else
+            echo "FAILURE: ExportOptions.plist NOT FOUND at $CM_BUILD_DIR/ios/App/ExportOptions.plist as expected."
+            echo "Possible reasons:"
+            echo "  1. It's not correctly committed to your Git repo at ios/App/."
+            echo "  2. There's a subtle typo in the file name or path (case sensitivity)."
+            echo "  3. It's being generated/moved/deleted by another script before this step."
+            echo "  4. Your .gitignore might be preventing it from being cloned correctly."
+          fi
+          echo "--- END DEBUGGING ---"
+
+      - name: Export IPA
+        script: |
+          echo "Preparing to export IPA from archive..."
+          
+          # This path assumes you have committed ExportOptions.plist
+          # into your repository at ios/App/ExportOptions.plist
+          PLIST_PATH="$CM_BUILD_DIR/ios/App/ExportOptions.plist"
+          
+          # The error message explicitly says it's not found, so the 'if' condition will trigger
+          # if the file isn't physically there. The debugging step above should confirm this.
+          if [ ! -f "$PLIST_PATH" ]; then
+            echo "Error: ExportOptions.plist not found at $PLIST_PATH. This was confirmed by the previous debug step if it printed 'FAILURE'."
+            echo "Please ensure the file is committed to your repository at 'ios/App/ExportOptions.plist' and is not ignored by Git."
+            exit 1 # Exit with error, as the file is truly missing at this point.
+          fi
+
+          echo "Using ExportOptions.plist from repository at: $PLIST_PATH"
+
+          IPA_EXPORT_DIR="$CM_BUILD_DIR/ipa_output"
+          mkdir -p "$IPA_EXPORT_DIR"
+          
+          echo "Exporting IPA to: $IPA_EXPORT_DIR"
+          xcodebuild -exportArchive \
+            -archivePath $CM_BUILD_DIR/build/App.xcarchive \
+            -exportPath "$IPA_EXPORT_DIR" \
+            -exportOptionsPlist "$PLIST_PATH" \
+            -allowProvisioningUpdates | xcpretty
+
+          echo "✅ iOS IPA export completed!"
+
+    # Defines what files/folders from the build machine should be saved as build artifacts
+    artifacts:
+      - $CM_BUILD_DIR/ipa_output/*.ipa # This will save your final IPA file
+      # Optional: To save the .xcarchive for debugging (it can be very large)
+      # - $CM_BUILD_DIR/build/*.xcarchive

@@ -3,10 +3,9 @@ ios:
   # Build configuration
   build_configuration: Release
   
-  # Code signing settings for ad-hoc distribution
+  # Code signing settings for automatic signing
   code_signing:
-    type: manual
-    identity: "iPhone Distribution"
+    type: automatic
     team_id: "UVTJ336J2D"
     bundle_identifier: "anardoni.export"
     
@@ -15,11 +14,12 @@ ios:
     method: ad-hoc
     team_id: "UVTJ336J2D"
     bundle_identifier: "anardoni.export"
+    signing_style: automatic
     
   # Build settings
   build_settings:
-    CODE_SIGN_STYLE: Manual
-    CODE_SIGN_IDENTITY: "iPhone Distribution"
+    CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_IDENTITY: "Apple Development"
     DEVELOPMENT_TEAM: "UVTJ336J2D"
     PRODUCT_BUNDLE_IDENTIFIER: "anardoni.export"
     PROVISIONING_PROFILE_SPECIFIER: ""

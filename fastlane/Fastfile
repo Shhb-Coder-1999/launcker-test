@@ -27,11 +27,7 @@ platform :ios do
       export_options: {
         method: "ad-hoc",
         teamID: "UVTJ336J2D",
-        signingStyle: "manual",
-        signingCertificate: "iPhone Distribution",
-        provisioningProfiles: {
-          "anardoni.export" => "iOS Team Ad Hoc Provisioning Profile: anardoni.export"
-        }
+        signingStyle: "automatic"
       },
       output_directory: "builds",
       output_name: "App.ipa",
@@ -52,11 +48,7 @@ platform :ios do
       export_options: {
         method: "app-store",
         teamID: "UVTJ336J2D",
-        signingStyle: "manual",
-        signingCertificate: "iPhone Distribution",
-        provisioningProfiles: {
-          "anardoni.export" => "iOS Team App Store Provisioning Profile: anardoni.export"
-        }
+        signingStyle: "automatic"
       },
       output_directory: "builds",
       output_name: "App.ipa",

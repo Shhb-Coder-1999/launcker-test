@@ -15,9 +15,9 @@
 - Now matches the `appId` in `capacitor.config.ts`
 
 ### 2. Updated Code Signing Configuration
-- Changed from `Automatic` to `Manual` code signing
-- Changed from `Apple Development` to `iPhone Distribution` identity
-- This is required for ad-hoc distribution builds
+- Changed to `Automatic` code signing for Appflow compatibility
+- Using `Apple Development` identity for automatic provisioning
+- This allows Appflow to handle provisioning profiles automatically
 
 ### 3. Fixed Build Script Warning
 - Added output path to the `[CP] Embed Pods Frameworks` script
@@ -29,23 +29,21 @@
 
 ## For Appflow Builds
 
-### Option 1: Use Automatic Code Signing (Recommended)
-If you want to use automatic code signing in Appflow:
+### Current Setup: Automatic Code Signing (Recommended for Appflow)
+The project is now configured for automatic code signing, which is the recommended approach for Appflow builds.
 
 1. In your Appflow build settings, ensure:
    - **Code Signing**: Set to "Automatic"
    - **Team ID**: `UVTJ336J2D`
    - **Bundle Identifier**: `anardoni.export`
 
-2. Revert the code signing changes in the project:
-   ```bash
-   # Change back to automatic code signing
-   CODE_SIGN_STYLE = Automatic
-   CODE_SIGN_IDENTITY = "Apple Development"
-   ```
+2. The project is already configured with:
+   - `CODE_SIGN_STYLE = Automatic`
+   - `CODE_SIGN_IDENTITY = "Apple Development"`
+   - `DEVELOPMENT_TEAM = UVTJ336J2D`
 
-### Option 2: Use Manual Code Signing (Current Setup)
-If you want to use manual code signing:
+### Alternative: Manual Code Signing
+If you need to use manual code signing:
 
 1. Ensure your Apple Developer account has:
    - Ad-hoc provisioning profile for `anardoni.export`
@@ -56,6 +54,13 @@ If you want to use manual code signing:
    - **Code Signing**: Set to "Manual"
    - **Provisioning Profile**: Select the ad-hoc profile for `anardoni.export`
    - **Certificate**: Select "iPhone Distribution"
+
+3. Update the project settings:
+   ```bash
+   CODE_SIGN_STYLE = Manual
+   CODE_SIGN_IDENTITY = "iPhone Distribution"
+   PROVISIONING_PROFILE_SPECIFIER = "Your_Provisioning_Profile_Name"
+   ```
 
 ## Testing the Fix
 

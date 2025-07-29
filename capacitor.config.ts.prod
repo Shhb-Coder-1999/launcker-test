@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'me.wcaleniewolny.test.ionic.vue',
+  appId: 'anardoni.export',
   appName: 'capgoTestVueApp',
   webDir: 'dist',
   plugins: {

@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.demo.app',
+  appId: 'anardoni.export',
   appName: 'capgoTestVueApp',
   webDir: 'dist',
   server: {

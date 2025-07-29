@@ -1,0 +1,68 @@
+# This file contains the fastlane.tools configuration
+# You can find the documentation at https://docs.fastlane.tools
+#
+# For a list of all available actions, check out
+#
+#     https://docs.fastlane.tools/actions
+#
+# For a list of all available plugins, check out
+#
+#     https://docs.fastlane.tools/plugins/available-plugins
+#
+
+# Uncomment the line if you want fastlane to automatically update itself
+# update_fastlane
+
+default_platform(:ios)
+
+platform :ios do
+  desc "Build iOS app for ad-hoc distribution"
+  lane :build_adhoc do
+    # Build the app
+    gym(
+      workspace: "ios/App/App.xcworkspace",
+      scheme: "App",
+      configuration: "Release",
+      export_method: "ad-hoc",
+      export_options: {
+        method: "ad-hoc",
+        teamID: "UVTJ336J2D",
+        signingStyle: "manual",
+        signingCertificate: "iPhone Distribution",
+        provisioningProfiles: {
+          "anardoni.export" => "iOS Team Ad Hoc Provisioning Profile: anardoni.export"
+        }
+      },
+      output_directory: "builds",
+      output_name: "App.ipa",
+      clean: true,
+      build_path: "builds",
+      archive_path: "builds/App.xcarchive"
+    )
+  end
+
+  desc "Build iOS app for App Store distribution"
+  lane :build_appstore do
+    # Build the app
+    gym(
+      workspace: "ios/App/App.xcworkspace",
+      scheme: "App",
+      configuration: "Release",
+      export_method: "app-store",
+      export_options: {
+        method: "app-store",
+        teamID: "UVTJ336J2D",
+        signingStyle: "manual",
+        signingCertificate: "iPhone Distribution",
+        provisioningProfiles: {
+          "anardoni.export" => "iOS Team App Store Provisioning Profile: anardoni.export"
+        }
+      },
+      output_directory: "builds",
+      output_name: "App.ipa",
+      clean: true,
+      build_path: "builds",
+      archive_path: "builds/App.xcarchive"
+    )
+  end
+end 
